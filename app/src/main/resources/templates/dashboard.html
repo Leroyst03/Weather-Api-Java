@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <title>Dashboard Meteorológico</title>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- SockJS + STOMP -->
+  <script src="https://cdn.jsdelivr.net/npm/sockjs-client/dist/sockjs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/stompjs/lib/stomp.min.js"></script>
+  <!-- Estilos externos -->
+  <link rel="stylesheet" href="/css/dashboard.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Dashboard Meteorológico</h1>
+
+    <div class="cards">
+      <div class="card">
+        <h2>// Temperatura actual</h2>
+        <p class="value red">
+          <span id="currentTemp">--</span> °C
+        </p>
+      </div>
+      <div class="card">
+        <h2>// Humedad actual</h2>
+        <p class="value blue">
+          <span id="currentHum">--</span> %
+        </p>
+      </div>
+    </div>
+
+    <canvas id="liveChart"></canvas>
+  </div>
+
+  <script>
+    let stompClient = null;
+    let chart = null;
+
+    function connectWebSocket() {
+      const socket = new SockJS('/ws');
+      stompClient = Stomp.over(socket);
+      stompClient.connect({}, function () {
+        stompClient.subscribe('/topic/live', function (message) {
+          const data = JSON.parse(message.body);
+          updateDashboard(data);
+        });
+      });
+    }
+
+    function updateDashboard(data) {
+      document.getElementById("currentTemp").innerText = data.temperature.toFixed(1);
+      document.getElementById("currentHum").innerText  = data.humidity.toFixed(1);
+
+      if (!chart) {
+        const ctx = document.getElementById('liveChart').getContext('2d');
+
+        // gradient fills
+        const gradT = ctx.createLinearGradient(0, 0, 0, 260);
+        gradT.addColorStop(0, 'rgba(255,107,53,.30)');
+        gradT.addColorStop(1, 'rgba(255,107,53,0)');
+
+        const gradH = ctx.createLinearGradient(0, 0, 0, 260);
+        gradH.addColorStop(0, 'rgba(0,200,255,.22)');
+        gradH.addColorStop(1, 'rgba(0,200,255,0)');
+
+        chart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: ['Inicio'],
+            datasets: [
+              {
+                label: 'Temperatura (°C)',
+                data: [data.temperature],
+                borderColor: '#ff6b35',
+                borderWidth: 2,
+                pointRadius: 2,
+                pointBackgroundColor: '#ff6b35',
+                backgroundColor: gradT,
+                fill: true,
+                tension: .4
+              },
+              {
+                label: 'Humedad (%)',
+                data: [data.humidity],
+                borderColor: '#00c8ff',
+                borderWidth: 2,
+                pointRadius: 2,
+                pointBackgroundColor: '#00c8ff',
+                backgroundColor: gradH,
+                fill: true,
+                tension: .4
+              }
+            ]
+          },
+          options: {
+            animation: false,
+            responsive: true,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+              legend: {
+                labels: {
+                  color: '#3d5468',
+                  font: { family: "'Share Tech Mono'", size: 11 },
+                  boxWidth: 10,
+                  padding: 20
+                }
+              },
+              tooltip: {
+                backgroundColor: '#0d1318',
+                borderColor: '#1a2535',
+                borderWidth: 1,
+                titleColor: '#3d5468',
+                bodyColor: '#c9d8e8',
+                titleFont: { family: "'Share Tech Mono'" },
+                bodyFont:  { family: "'Share Tech Mono'" },
+                padding: 12
+              }
+            },
+            scales: {
+              x: {
+                grid:   { color: 'rgba(26,37,53,.8)', drawTicks: false },
+                ticks:  { color: '#3d5468', font: { family: "'Share Tech Mono'", size: 10 }, maxTicksLimit: 10 },
+                border: { color: '#1a2535' }
+              },
+              y: {
+                beginAtZero: false,
+                grid:   { color: 'rgba(26,37,53,.8)', drawTicks: false },
+                ticks:  { color: '#3d5468', font: { family: "'Share Tech Mono'", size: 10 } },
+                border: { color: '#1a2535' }
+              }
+            }
+          }
+        });
+
+      } else {
+        chart.data.labels.push('');
+        chart.data.datasets[0].data.push(data.temperature);
+        chart.data.datasets[1].data.push(data.humidity);
+
+        if (chart.data.labels.length > 50) {
+          chart.data.labels.shift();
+          chart.data.datasets[0].data.shift();
+          chart.data.datasets[1].data.shift();
+        }
+
+        chart.update();
+      }
+    }
+
+    connectWebSocket();
+  </script>
+</body>
+</html>
